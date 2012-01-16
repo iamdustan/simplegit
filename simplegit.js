@@ -5,6 +5,7 @@
  */
 
 var exec = require('child_process').exec;
+var async = require('async');
 
 var simplegit = {
   currentBranch: 'master',
@@ -48,7 +49,7 @@ var simplegit = {
     this.action({
       action: 'pull',
       remote: obj.remote || 'origin',
-      branch: obj.branch || this.currentBranch || 'master'
+      branch: obj.branch || simplegit.currentBranch || 'master'
     }, cb);
   },
 
@@ -57,9 +58,58 @@ var simplegit = {
     this.action({
       action: 'push',
       remote: obj.remote || 'origin',
-      branch: obj.branch || this.currentBranch || 'master'
+      branch: obj.branch || simplegit.currentBranch || 'master'
     }, cb);
+  },
+
+  'git-sync': function(data, callback) {
+    var self = this;
+
+    // clean up data for the git commands
+    data['add-files'] = data['add-files'] || null;
+    data['commit-message'] = data['commit-message'] || null;
+
+    async.series([
+        function add(cb) {
+          self.add(data['commit-files'], function() {
+            cb(null, 'add')
+          });
+        },
+        function commit(cb) {
+          self.commit(data['commit-message'], function() {
+            cb(null, 'commit')
+          });
+        },
+        function pull(cb) {
+          self.pull({}, function() {
+            cb(null, 'pull') }
+          );
+        },
+        function push(cb) {
+          self.push({}, function() {
+            cb(null, 'push')
+          });
+        },
+      ],
+      function collectedCallback(err, results) {
+        if (err) {
+          err = {
+            "status": "error",
+            "message" : "Something went wrong syncing with Github. View developer logs to debug"
+          };
+        }
+        results = {
+          "status": "success",
+          "data": {
+            "message": "You have successfully sync’d with Github"
+          }
+        };
+
+        callback(err || results);
+      }
+    )
   }
+
 };
 
 exec("git symbolic-ref -q HEAD", function(err, stdout, stderr) {
@@ -70,5 +120,4 @@ exec("git symbolic-ref -q HEAD", function(err, stdout, stderr) {
 });
 
 module.exports = simplegit;
-
 
